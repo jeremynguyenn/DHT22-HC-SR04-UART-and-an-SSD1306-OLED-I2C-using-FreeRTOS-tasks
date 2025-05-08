@@ -1,0 +1,129 @@
+/*
+ * ssd1306-spi-driver.c
+ *
+ *  Created on: May 3, 2025
+ *      Author: sande
+ */
+// ssd1306.c - SPI Driver for SSD1306 OLED 128x32 on STM32F103 (SPI2, GPIOB)
+
+#include "stm32f103xb.h"
+#include "ssd1306-spi-driver.h"
+#include "delay.h"
+#include <string.h>
+
+#define SSD1306_WIDTH 128
+#define SSD1306_HEIGHT 32
+#define SSD1306_BUFFERSIZE (SSD1306_WIDTH * SSD1306_HEIGHT / 8)
+
+// Pin definitions
+#define SSD1306_CS_LOW()   (GPIOB->BRR  |= (1 << 12))
+#define SSD1306_CS_HIGH()  (GPIOB->BSRR |= (1 << 12))
+#define SSD1306_DC_LOW()   (GPIOB->BRR  |= (1 << 14))
+#define SSD1306_DC_HIGH()  (GPIOB->BSRR |= (1 << 14))
+#define SSD1306_RES_LOW()  (GPIOB->BRR  |= (1 << 10))
+#define SSD1306_RES_HIGH() (GPIOB->BSRR |= (1 << 10))
+
+static uint8_t buffer[SSD1306_BUFFERSIZE];
+
+static void SPI2_Write(uint8_t data) {
+    while (!(SPI2->SR & SPI_SR_TXE));
+    SPI2->DR = data;
+    while (SPI2->SR & SPI_SR_BSY);
+}
+
+static void SSD1306_WriteCommand(uint8_t cmd) {
+    SSD1306_DC_LOW();
+    SSD1306_CS_LOW();
+    SPI2_Write(cmd);
+    SSD1306_CS_HIGH();
+}
+
+static void SSD1306_WriteData(uint8_t data) {
+    SSD1306_DC_HIGH();
+    SSD1306_CS_LOW();
+    SPI2_Write(data);
+    SSD1306_CS_HIGH();
+}
+
+void SSD1306_Init(void) {
+    // Enable clocks
+    RCC->APB2ENR |= RCC_APB2ENR_IOPBEN;
+    RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
+
+    // GPIOB Configuration
+    // PB13 (SCK), PB15 (MOSI), Alternate Push Pull
+    GPIOB->CRH &= ~(GPIO_CRH_CNF13 | GPIO_CRH_MODE13);
+    GPIOB->CRH |= (GPIO_CRH_CNF13_1 | GPIO_CRH_MODE13_1);
+
+    GPIOB->CRH &= ~(GPIO_CRH_CNF15 | GPIO_CRH_MODE15);
+    GPIOB->CRH |= (GPIO_CRH_CNF15_1 | GPIO_CRH_MODE15_1);
+
+
+    // SPI2 Configuration
+    SPI2->CR1 = SPI_CR1_MSTR | SPI_CR1_BR_0 | SPI_CR1_SSM | SPI_CR1_SSI;
+    SPI2->CR1 |= SPI_CR1_SPE;
+
+    // Reset OLED
+    SSD1306_RES_LOW();
+    delay_ms(10);
+    SSD1306_RES_HIGH();
+
+    // Init sequence
+    SSD1306_WriteCommand(0xAE);
+    SSD1306_WriteCommand(0xD5);
+    SSD1306_WriteCommand(0x80);
+    SSD1306_WriteCommand(0xA8);
+    SSD1306_WriteCommand(0x1F);
+    SSD1306_WriteCommand(0xD3);
+    SSD1306_WriteCommand(0x00);
+    SSD1306_WriteCommand(0x40);
+    SSD1306_WriteCommand(0x8D);
+    SSD1306_WriteCommand(0x14);
+    SSD1306_WriteCommand(0x20);
+    SSD1306_WriteCommand(0x00);
+    SSD1306_WriteCommand(0xA1);
+    SSD1306_WriteCommand(0xC8);
+    SSD1306_WriteCommand(0xDA);
+    SSD1306_WriteCommand(0x02);
+    SSD1306_WriteCommand(0x81);
+    SSD1306_WriteCommand(0x8F);
+    SSD1306_WriteCommand(0xD9);
+    SSD1306_WriteCommand(0xF1);
+    SSD1306_WriteCommand(0xDB);
+    SSD1306_WriteCommand(0x40);
+    SSD1306_WriteCommand(0xA4);
+    SSD1306_WriteCommand(0xA6);
+    SSD1306_WriteCommand(0xAF);
+
+    SSD1306_Clear();
+    SSD1306_UpdateScreen();
+}
+
+void SSD1306_Clear(void) {
+    memset(buffer, 0x00, sizeof(buffer));
+}
+
+void SSD1306_UpdateScreen(void) {
+    for (uint8_t page = 0; page < 4; page++) {
+        SSD1306_WriteCommand(0xB0 + page);
+        SSD1306_WriteCommand(0x00);
+        SSD1306_WriteCommand(0x10);
+        for (uint8_t i = 0; i < SSD1306_WIDTH; i++) {
+            SSD1306_WriteData(buffer[page * SSD1306_WIDTH + i]);
+        }
+    }
+}
+
+void SSD1306_DisplayString(uint8_t row, uint8_t col, const char* str) {
+    extern const uint8_t Font6x8[][6];
+    uint16_t offset = row * SSD1306_WIDTH + col * 6;
+
+    while (*str && offset < SSD1306_BUFFERSIZE - 6) {
+        for (int i = 0; i < 6; i++) {
+            buffer[offset + i] = Font6x8[*str - 32][i];
+        }
+        offset += 6;
+        str++;
+    }
+    SSD1306_UpdateScreen();
+}

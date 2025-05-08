@@ -1,0 +1,49 @@
+/*
+ * uart-driver.c
+ *
+ *  Created on: May 3, 2025
+ *      Author: sande
+ */
+#include "stm32f103xb.h"
+#include "uart-driver.h"
+
+void UART1_Init(void) {
+    // Enable GPIOA and USART1 clocks
+    RCC->APB2ENR |= RCC_APB2ENR_IOPAEN | RCC_APB2ENR_USART1EN;
+
+    // PA9 (TX): Alternate Function Push-Pull
+    GPIOA->CRH &= ~(GPIO_CRH_MODE9 | GPIO_CRH_CNF9);
+    GPIOA->CRH |=  (GPIO_CRH_MODE9_1 | GPIO_CRH_MODE9_0); // Output 50 MHz
+    GPIOA->CRH |=  GPIO_CRH_CNF9_1;                       // AF Push-Pull
+
+    // PA10 (RX): Input Floating
+    GPIOA->CRH &= ~(GPIO_CRH_MODE10 | GPIO_CRH_CNF10);
+    GPIOA->CRH |= GPIO_CRH_CNF10_0;                       // Input floating
+
+    // Set baud rate (72 MHz / 16 / 9600) = 468.75 => BRR = 0x1D4C
+    USART1->BRR = 0x1D4C;
+
+    // Enable USART, TX, RX
+    USART1->CR1 |= USART_CR1_UE | USART_CR1_TE | USART_CR1_RE;
+}
+
+void UART1_SendChar(char c) {
+    while (!(USART1->SR & USART_SR_TXE));
+    USART1->DR = c;
+}
+
+char UART1_ReceiveChar(void) {
+    while (!(USART1->SR & USART_SR_RXNE));
+    return USART1->DR;
+}
+
+void UART1_SendString(const char *str) {
+    while (*str) {
+        UART1_SendChar(*str++);
+    }
+}
+
+uint8_t UART1_CharAvailable(void) {
+    return USART1->SR & USART_SR_RXNE;
+}
+

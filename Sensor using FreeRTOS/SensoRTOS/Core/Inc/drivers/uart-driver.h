@@ -1,0 +1,18 @@
+/*
+ * uart-driver.h
+ *
+ *  Created on: May 3, 2025
+ *      Author: sande
+ */
+
+#ifndef INC_DRIVERS_UART_DRIVER_H_
+#define INC_DRIVERS_UART_DRIVER_H_
+#include <stdint.h>
+
+void UART1_Init(void);
+void UART1_SendChar(char c);
+char UART1_ReceiveChar(void);
+void UART1_SendString(const char *str);
+uint8_t UART1_CharAvailable(void);
+
+#endif /* INC_DRIVERS_UART_DRIVER_H_ */

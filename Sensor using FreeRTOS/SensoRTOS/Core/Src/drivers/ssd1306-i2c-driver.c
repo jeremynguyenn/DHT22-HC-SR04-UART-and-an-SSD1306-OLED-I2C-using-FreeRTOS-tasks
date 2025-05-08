@@ -1,0 +1,106 @@
+#include "stm32f103xb.h"
+#include "ssd1306-i2c-driver.h"
+#include "delay.h"
+#include <string.h>
+
+#define SSD1306_ADDR 0x78  // I2C address for 128x32 OLED (0x3C << 1)
+#define SSD1306_WIDTH 128
+#define SSD1306_HEIGHT 32
+#define SSD1306_BUFFERSIZE (SSD1306_WIDTH * SSD1306_HEIGHT / 8)
+
+static uint8_t buffer[SSD1306_BUFFERSIZE];
+
+static void I2C1_Write(uint8_t control, uint8_t data) {
+    while (I2C1->SR2 & I2C_SR2_BUSY);
+    I2C1->CR1 |= I2C_CR1_START;
+    while (!(I2C1->SR1 & I2C_SR1_SB));
+    (void)I2C1->SR1;
+    I2C1->DR = SSD1306_ADDR;
+    while (!(I2C1->SR1 & I2C_SR1_ADDR));
+    (void)I2C1->SR2;
+
+    I2C1->DR = control;
+    while (!(I2C1->SR1 & I2C_SR1_TXE));
+    I2C1->DR = data;
+    while (!(I2C1->SR1 & I2C_SR1_TXE));
+
+    I2C1->CR1 |= I2C_CR1_STOP;
+    delay_us(10);
+}
+
+static void SSD1306_WriteCommand(uint8_t cmd) {
+    I2C1_Write(0x00, cmd);
+}
+
+static void SSD1306_WriteData(uint8_t data) {
+    I2C1_Write(0x40, data);
+}
+
+void SSD1306_I2C_Init(void) {
+  //  RCC->APB2ENR |= RCC_APB2ENR_IOPBEN;
+    RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;
+    //RCC->APB2ENR |= RCC_APB2ENR_AFIOEN;
+
+    // PB6 (SCL), PB7 (SDA) -> Alt open-drain, 2MHz
+    GPIOB->CRL &= ~((GPIO_CRL_CNF6 | GPIO_CRL_MODE6) | (GPIO_CRL_CNF7 | GPIO_CRL_MODE7));
+    GPIOB->CRL |= (GPIO_CRL_CNF6_1 | GPIO_CRL_MODE6_1);  // AF Open-drain
+    GPIOB->CRL |= (GPIO_CRL_CNF7_1 | GPIO_CRL_MODE7_1);
+
+    I2C1->CR2 = 36;  // PCLK1 = 36MHz
+    I2C1->CCR = 180; // 100kHz standard mode
+    I2C1->TRISE = 37;
+    I2C1->CR1 = I2C_CR1_PE;
+}
+
+void SSD1306_Init(void) {
+    SSD1306_I2C_Init();
+    delay_ms(100);
+
+    SSD1306_WriteCommand(0xAE); // Display OFF
+    SSD1306_WriteCommand(0xD5); SSD1306_WriteCommand(0x80); // Set display clock
+    SSD1306_WriteCommand(0xA8); SSD1306_WriteCommand(0x1F); // Multiplex ratio
+    SSD1306_WriteCommand(0xD3); SSD1306_WriteCommand(0x00); // Display offset
+    SSD1306_WriteCommand(0x40); // Start line
+    SSD1306_WriteCommand(0x8D); SSD1306_WriteCommand(0x14); // Enable charge pump
+    SSD1306_WriteCommand(0x20); SSD1306_WriteCommand(0x00); // Horizontal addressing
+    SSD1306_WriteCommand(0xA1); // Segment remap
+    SSD1306_WriteCommand(0xC8); // COM scan direction
+    SSD1306_WriteCommand(0xDA); SSD1306_WriteCommand(0x02); // COM pins config
+    SSD1306_WriteCommand(0x81); SSD1306_WriteCommand(0x8F); // Contrast
+    SSD1306_WriteCommand(0xD9); SSD1306_WriteCommand(0xF1); // Precharge
+    SSD1306_WriteCommand(0xDB); SSD1306_WriteCommand(0x40); // VCOMH
+    SSD1306_WriteCommand(0xA4); // Resume to RAM
+    SSD1306_WriteCommand(0xA6); // Normal display
+    SSD1306_WriteCommand(0xAF); // Display ON
+
+    SSD1306_Clear();
+    SSD1306_UpdateScreen();
+}
+
+void SSD1306_Clear(void) {
+    memset(buffer, 0x00, sizeof(buffer));
+}
+
+void SSD1306_UpdateScreen(void) {
+    for (uint8_t page = 0; page < 4; page++) {
+        SSD1306_WriteCommand(0xB0 + page);
+        SSD1306_WriteCommand(0x00);
+        SSD1306_WriteCommand(0x10);
+        for (uint8_t i = 0; i < SSD1306_WIDTH; i++) {
+            SSD1306_WriteData(buffer[page * SSD1306_WIDTH + i]);
+        }
+    }
+}
+
+void SSD1306_DisplayString(uint8_t row, uint8_t col, const char* str) {
+    extern const uint8_t Font6x8[][6];
+    uint16_t offset = row * SSD1306_WIDTH + col * 6;
+    while (*str && offset < SSD1306_BUFFERSIZE - 6) {
+        for (int i = 0; i < 6; i++) {
+            buffer[offset + i] = Font6x8[*str - 32][i];
+        }
+        offset += 6;
+        str++;
+    }
+    SSD1306_UpdateScreen();
+}

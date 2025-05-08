@@ -1,0 +1,5 @@
+../Core/Src/drivers/uart-driver.c:10:6:UART1_Init	4	static
+../Core/Src/drivers/uart-driver.c:30:6:UART1_SendChar	16	static
+../Core/Src/drivers/uart-driver.c:35:6:UART1_ReceiveChar	4	static
+../Core/Src/drivers/uart-driver.c:40:6:UART1_SendString	16	static
+../Core/Src/drivers/uart-driver.c:46:9:UART1_CharAvailable	4	static

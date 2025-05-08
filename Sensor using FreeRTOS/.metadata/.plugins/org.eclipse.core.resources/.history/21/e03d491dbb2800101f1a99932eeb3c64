@@ -1,0 +1,88 @@
+/*
+ * hc_sr04-driver.c
+ *
+ *  Created on: May 3, 2025
+ *      Author: sande
+ */
+#include "stm32f103xb.h"
+#include "delay.h"
+#include "uart-driver.h"
+#include "hc_sr04-driver.h"
+
+#define TRIG_PIN     1
+#define ECHO_PIN     2
+#define TRIG_PORT    GPIOA
+#define ECHO_PORT    GPIOA
+
+static volatile uint32_t start_time = 0;
+static volatile uint32_t end_time = 0;
+static volatile uint8_t capture_done = 0;
+
+void HC_SR04_Init(void) {
+    // Enable clocks
+    RCC->APB2ENR |= RCC_APB2ENR_IOPAEN;     // GPIOA
+    RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;     // Timer 2
+
+    // Configure TRIG (PA1) as Output Push-Pull
+    TRIG_PORT->CRL &= ~(GPIO_CRL_MODE1 | GPIO_CRL_CNF1);
+    TRIG_PORT->CRL |= GPIO_CRL_MODE1_1;  // Output 2MHz, Push-Pull
+
+    // Configure ECHO (PA2) as Input Floating
+    ECHO_PORT->CRL &= ~(GPIO_CRL_MODE2 | GPIO_CRL_CNF2);
+    ECHO_PORT->CRL |= GPIO_CRL_CNF2_0;   // Floating input
+
+    // Timer2 CH2 (PA1) Input Capture Mode
+    TIM2->PSC = 72 - 1; // 72MHz / 72 = 1MHz -> 1us tick
+    TIM2->ARR = 0xFFFF;
+
+    TIM2->CCMR1 &= ~TIM_CCMR1_CC2S;
+    TIM2->CCMR1 |= 0x01 << 8; // CC2 channel is input, IC2 is mapped to TI2
+
+    TIM2->CCER &= ~TIM_CCER_CC2P; // Rising edge initially
+    TIM2->DIER |= TIM_DIER_CC2IE; // Enable capture interrupt
+    TIM2->CR1 |= TIM_CR1_CEN;     // Enable timer
+
+    NVIC_EnableIRQ(TIM2_IRQn);
+}
+
+void HC_SR04_Trigger(void) {
+    TRIG_PORT->BSRR = (1 << TRIG_PIN); // Set high
+    delay_us(10);
+    TRIG_PORT->BRR = (1 << TRIG_PIN);  // Set low
+}
+
+uint32_t HC_SR04_GetDistance(void) {
+    capture_done = 0;
+    TIM2->CCER &= ~TIM_CCER_CC2P;  // Rising edge
+    TIM2->SR &= ~TIM_SR_CC2IF;     // Clear flag
+
+    HC_SR04_Trigger();
+
+    // Wait for both rising and falling edge captures
+    uint32_t timeout = 30000;  // ~30ms
+    while (!capture_done && --timeout) delay_us(1);
+
+    if (capture_done) {
+        uint32_t duration = end_time - start_time;
+        return duration / 58;  // Convert us to cm
+    } else {
+        return 0;  // Timeout
+    }
+}
+
+void TIM2_IRQHandler(void) {
+    if (TIM2->SR & TIM_SR_CC2IF) {
+        TIM2->SR &= ~TIM_SR_CC2IF;  // Clear interrupt flag
+
+        if (!(TIM2->CCER & TIM_CCER_CC2P)) {
+            // Rising edge detected
+            start_time = TIM2->CCR2;
+            TIM2->CCER |= TIM_CCER_CC2P;  // Switch to falling edge
+        } else {
+            // Falling edge detected
+            end_time = TIM2->CCR2;
+            capture_done = 1;
+            TIM2->CCER &= ~TIM_CCER_CC2P;  // Reset to rising for next time
+        }
+    }
+}

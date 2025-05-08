@@ -1,0 +1,2 @@
+../Core/Src/drivers/hc_sr04-driver.c:18:6:HC_SR04_Init	4	static
+../Core/Src/drivers/hc_sr04-driver.c:33:10:HC_SR04_Read	16	static

@@ -1,0 +1,47 @@
+#include "cmsis_os.h"   // Include CMSIS RTOS
+#include "systemclock_config.h"
+#include "task_uart.h"  // Your task header
+#include "uart-driver.h"
+extern UART_HandleTypeDef huart1; // Assuming UART is initialized with HAL
+osThreadId uartTaskHandle;
+void UART1_SendString(char* str) {
+    HAL_UART_Transmit(&huart1, (uint8_t*)str, strlen(str), HAL_MAX_DELAY);
+}
+
+// Task definition for UART Task
+void UART_Task(void *argument) {
+    while(1) {
+        UART1_SendString("Task is running...\r\n");
+        osDelay(1000);  // Delay to let other tasks run
+    }
+}
+
+int main(void) {
+   // HAL_Init();                  // HAL initialization
+    SystemClock_Config();         // Configure system clock
+
+    // UART initialization (assuming HAL)
+    UART1_Init();
+
+    // Print check to UART
+    UART1_SendString("Initialized\r\n");
+
+    // Initialize FreeRTOS kernel
+    osKernelInitialize();         // Initialize RTOS kernel
+    UART1_SendString("Check1\r\n");
+
+    // Create UART Task
+    osThreadDef(UART_Task, UART_Task, osPriorityNormal, 1, 512);
+    uartTaskHandle = osThreadCreate(osThread(UART_Task), NULL);
+    UART1_SendString("Check2\r\n");
+
+    // Start FreeRTOS scheduler
+    osKernelStart();              // Start scheduler
+
+    // If kernel starts successfully, this line should not be reached.
+    UART1_SendString("Check3\r\n");
+
+    while (1) {
+        // Main loop
+    }
+}

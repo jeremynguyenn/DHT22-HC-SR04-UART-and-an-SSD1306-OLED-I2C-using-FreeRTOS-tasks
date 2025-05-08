@@ -1,0 +1,86 @@
+/*
+ * dht22-driver.c
+ *
+ *  Created on: May 3, 2025
+ *      Author: sandeep
+ */
+#include "stm32f103xb.h"
+#include "dht22-driver.h"
+#include "uart-driver.h"
+
+#define DHT22_PORT GPIOA
+#define DHT22_PIN  0
+
+#define DHT22_PIN_MASK (1U << DHT22_PIN)
+
+static void set_pin_output(void) {
+    DHT22_PORT->CRL &= ~(GPIO_CRL_MODE0 | GPIO_CRL_CNF0);
+    DHT22_PORT->CRL |= GPIO_CRL_MODE0_1;      // Output mode 2 MHz
+    DHT22_PORT->CRL |= GPIO_CRL_CNF0_0;       // Open-drain output
+}
+
+static void set_pin_input(void) {
+    DHT22_PORT->CRL &= ~(GPIO_CRL_MODE0 | GPIO_CRL_CNF0);
+    DHT22_PORT->CRL |= GPIO_CRL_CNF0_1;       // Input with pull-up/down
+}
+
+static void delay_us(volatile uint32_t us) {
+    while(us--) {
+        for (volatile int i = 0; i < 8; i++) __asm__("NOP");
+    }
+}
+
+uint8_t DHT22_Read(uint8_t* temperature, uint8_t* humidity) {
+    uint8_t bits[5] = {0};
+
+    // Start Signal
+    set_pin_output();
+    DHT22_PORT->ODR &= ~DHT22_PIN_MASK;
+    delay_us(1000 * 20); // ~20ms
+    DHT22_PORT->ODR |= DHT22_PIN_MASK;
+    delay_us(30);
+    set_pin_input();  // Let DHT22 pull line low
+    if (!(DHT22_PORT->IDR & DHT22_PIN_MASK)) {
+        UART1_SendString("DHT22 pulling low = OK\r\n");
+    } else {
+        UART1_SendString("No response from DHT22\r\n");
+    }
+
+   // delay_us(40);
+    // Check response: 80us LOW, then 80us HIGH
+    if (!(DHT22_PORT->IDR & DHT22_PIN_MASK)) {
+        UART1_SendString("check4\r\n");
+        delay_us(80);
+        if ((DHT22_PORT->IDR & DHT22_PIN_MASK)) {
+            delay_us(80);
+            UART1_SendString("check5\r\n");
+            // Read 5 bytes = 40 bits
+            for (int byte = 0; byte < 5; byte++) {
+                for (int bit = 0; bit < 8; bit++) {
+                    while (!(DHT22_PORT->IDR & DHT22_PIN_MASK)); // Wait for high
+                    delay_us(40); // After ~40us, read bit
+                    UART1_SendString("check6\r\n");
+                    if (DHT22_PORT->IDR & DHT22_PIN_MASK)
+                        bits[byte] |= (1 << (7 - bit));
+
+                    while (DHT22_PORT->IDR & DHT22_PIN_MASK); // Wait for low
+                }
+            }
+
+            // Checksum
+            if (((uint8_t)(bits[0] + bits[1] + bits[2] + bits[3])) == bits[4]) {
+                UART1_SendString("data recieved\r\n");
+                *humidity = bits[0];      // Integer part
+                *temperature = bits[2];   // Integer part
+                return 1;
+            }
+        }
+    }
+    UART1_SendString("returning 0\r\n");
+    return 0; // Failed
+}
+
+void DHT22_Init(void) {
+    RCC->APB2ENR |= RCC_APB2ENR_IOPAEN;
+    set_pin_input();  // Initially idle input
+}

@@ -1,0 +1,18 @@
+#include "cmsis_os.h"
+#include "task_uart.h"
+
+osThreadDef(UART_Task, osPriorityNormal, 1, 512); // stack size = 512 words
+
+int main(void) {
+    HAL_Init();
+    SystemClock_Config();
+
+    osKernelInitialize();
+
+    uartTaskHandle = osThreadCreate(osThread(UART_Task), NULL);
+
+    osKernelStart();
+
+    while (1);
+}
+

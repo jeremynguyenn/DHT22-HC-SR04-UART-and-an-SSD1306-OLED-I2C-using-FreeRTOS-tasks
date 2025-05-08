@@ -1,0 +1,13 @@
+/*
+ * task-uart.h
+ *
+ *  Created on: May 4, 2025
+ *      Author: sande
+ */
+
+#ifndef INC_TASKS_TASK_UART_H_
+#define INC_TASKS_TASK_UART_H_
+
+
+
+#endif /* INC_TASKS_TASK_UART_H_ */

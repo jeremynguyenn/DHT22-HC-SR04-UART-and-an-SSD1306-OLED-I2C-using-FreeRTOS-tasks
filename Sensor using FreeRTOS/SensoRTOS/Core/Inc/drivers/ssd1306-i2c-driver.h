@@ -1,0 +1,17 @@
+/*
+ * ssd1306-spi-driver.h
+ *
+ *  Created on: May 3, 2025
+ *      Author: sande
+ */
+
+#ifndef INC_DRIVERS_SSD1306_I2C_DRIVER_H_
+#define INC_DRIVERS_SSD1306_I2C_DRIVER_H_
+#include <stdint.h>
+
+void SSD1306_Init(void);
+void SSD1306_Clear(void);
+void SSD1306_UpdateScreen(void);
+void SSD1306_DisplayString(uint8_t row, uint8_t col, const char* str);
+
+#endif /* INC_DRIVERS_SSD1306_I2C_DRIVER_H_ */

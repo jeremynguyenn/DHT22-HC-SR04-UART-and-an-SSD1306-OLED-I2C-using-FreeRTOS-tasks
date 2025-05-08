@@ -1,0 +1,34 @@
+/*
+ * dht22-driver.c
+ *
+ *  Created on: May 3, 2025
+ *      Author: sandeep
+ */
+#include "stm32f103xb.h"
+#include "dht22-driver.h"
+
+#define DHT22_PIN       GPIOA->IDR  // Assume connected to PA0
+
+void DHT22_Init(void) {
+    // Configure PA0 as GPIO Output (for DHT22 data communication)
+    RCC->APB2ENR |= RCC_APB2ENR_IOPAEN;
+    GPIOA->CRL &= ~(GPIO_CRL_MODE0 | GPIO_CRL_CNF0);
+    GPIOA->CRL |= GPIO_CRL_MODE0_1;  // Output mode, 2 MHz
+    GPIOA->CRL |= GPIO_CRL_CNF0_0;   // General-purpose output push-pull
+}
+
+uint8_t DHT22_Read(uint8_t* temp, uint8_t* humidity) {
+    // Start signal: Send low for > 18 ms to trigger DHT11 response
+    GPIOA->ODR &= ~GPIO_ODR_ODR0;  // PA0 Low
+    for (volatile int i = 0; i < 1000; i++);  // Delay ~18 ms
+
+    GPIOA->ODR |= GPIO_ODR_ODR0;   // PA0 High
+
+    // Read sensor data logic (simplified for demonstration)
+    // Logic to read 5 bytes (humidity and temperature) would go here
+
+    // Return a success or failure code
+    return 1;  // Success
+}
+
+

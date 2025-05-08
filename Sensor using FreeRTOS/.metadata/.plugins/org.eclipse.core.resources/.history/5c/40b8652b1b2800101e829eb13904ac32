@@ -1,0 +1,73 @@
+#include "stm32f103xb.h"
+#include "uart-driver.h"
+#include "gpio-driver.h"
+#include "dht22-driver.h"
+#include "hc_sr04-driver.h"
+#include "delay.h"
+#include <string.h>
+#include <stdio.h>
+
+char rx_buffer[16];
+uint8_t idx = 0;
+uint8_t temperature, humidity;
+
+int main(void) {
+    UART1_Init();
+    GPIO_Init();
+    DHT22_Init();
+    HC_SR04_Init();
+   // Timer1_Init();  // For delay_us
+    UART1_SendString("System Initialized\r\n");
+
+    uint32_t prev_distance = 0;
+
+    while (1) {
+        char c = UART1_ReceiveChar();
+        UART1_SendChar(c);  // Echo
+
+        if (c == '\r') {
+            rx_buffer[idx] = '\0';
+
+            if (strcmp(rx_buffer, "TSTART") == 0) {
+                // ... (same as before)
+            } else if (strcmp(rx_buffer, "LED ON") == 0) {
+                LED_ON();
+                UART1_SendString("LED Turned ON\r\n");
+            } else if (strcmp(rx_buffer, "LED OFF") == 0) {
+                LED_OFF();
+                UART1_SendString("LED Turned OFF\r\n");
+            } else if (strcmp(rx_buffer, "DIST") == 0) {
+                UART1_SendString("Real-time Distance Monitoring Started\r\n");
+
+                while (1) {
+                    uint32_t dist = HC_SR04_Read();
+                    if (dist != prev_distance && dist < 400) {  // Max sensor range ~400 cm
+                        char msg[32];
+                        snprintf(msg, sizeof(msg), "Distance: %lu cm\r\n", dist);
+                        UART1_SendString(msg);
+                        prev_distance = dist;
+                    }
+
+                    delay_ms(10);  // Adjust rate of update
+
+                    // Break the loop if user types 'X' (optional)
+                    if (UART1_ReceiveChar()==("x"||"X")) {
+                        char stop = UART1_ReceiveChar();
+                        if (stop == 'X') {
+                            UART1_SendString("Monitoring Stopped\r\n");
+                            break;
+                        }
+                    }
+                }
+            } else {
+                UART1_SendString("Unknown Command\r\n");
+            }
+
+            idx = 0;
+        } else if (idx < sizeof(rx_buffer) - 1) {
+            rx_buffer[idx++] = c;
+        }
+
+        delay_ms(5);
+    }
+}

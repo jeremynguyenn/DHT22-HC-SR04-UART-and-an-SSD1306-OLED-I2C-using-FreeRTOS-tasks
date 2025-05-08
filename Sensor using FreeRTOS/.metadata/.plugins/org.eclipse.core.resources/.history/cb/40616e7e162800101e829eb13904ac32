@@ -1,0 +1,28 @@
+/*
+ * delay.c
+ *
+ *  Created on: May 3, 2025
+ *      Author: sande
+ */
+#include "stm32f103xb.h"
+#include "delay.h"
+
+void Timer1_Init(void) {
+    RCC->APB2ENR |= RCC_APB2ENR_TIM1EN;
+    TIM1->PSC = 72 - 1;        // 1 MHz = 1 µs tick
+    TIM1->ARR = 0xFFFF;
+    TIM1->CNT = 0;
+    TIM1->CR1 |= TIM_CR1_CEN;
+}
+
+void delay_us(uint32_t us) {
+    TIM1->CNT = 0;
+    while (TIM1->CNT < us);
+}
+
+void delay_ms(uint32_t ms) {
+    while (ms--) delay_us(1000);
+}
+
+
+

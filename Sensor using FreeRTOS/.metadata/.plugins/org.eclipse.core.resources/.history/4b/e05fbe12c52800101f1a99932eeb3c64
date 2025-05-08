@@ -1,0 +1,21 @@
+#include "task_uart.h"
+
+osThreadId_t uartTaskHandle;
+const osThreadAttr_t uartTask_attributes = {
+    .name = "uartTask",
+    .priority = (osPriority_t) osPriorityNormal,
+    .stack_size = 512
+};
+
+int main(void) {
+    HAL_Init();  // if used
+    SystemClock_Config();  // if applicable
+
+    osKernelInitialize();
+
+    uartTaskHandle = osThreadNew(UART_Task, NULL, &uartTask_attributes);
+
+    osKernelStart();
+
+    while (1);
+}

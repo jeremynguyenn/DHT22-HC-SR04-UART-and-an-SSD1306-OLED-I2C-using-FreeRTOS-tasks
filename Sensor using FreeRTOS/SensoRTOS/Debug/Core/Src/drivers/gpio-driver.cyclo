@@ -1,0 +1,5 @@
+../Core/Src/drivers/gpio-driver.c:10:6:GPIO_Init	1
+../Core/Src/drivers/gpio-driver.c:24:6:LED_ON	1
+../Core/Src/drivers/gpio-driver.c:28:6:LED_OFF	1
+../Core/Src/drivers/gpio-driver.c:32:6:BUZZER_ON	1
+../Core/Src/drivers/gpio-driver.c:36:6:BUZZER_OFF	1

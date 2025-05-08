@@ -1,0 +1,13 @@
+/*
+ * hc_sr04-driver.h
+ *
+ *  Created on: May 3, 2025
+ *      Author: sande
+ */
+
+#ifndef INC_DRIVERS_HC_SR04_DRIVER_H_
+#define INC_DRIVERS_HC_SR04_DRIVER_H_
+
+
+
+#endif /* INC_DRIVERS_HC_SR04_DRIVER_H_ */

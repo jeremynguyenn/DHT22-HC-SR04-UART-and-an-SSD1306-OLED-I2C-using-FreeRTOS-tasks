@@ -1,0 +1,143 @@
+/*
+ * ssd1306-spi-driver.c
+ *
+ *  Created on: May 3, 2025
+ *      Author: sande
+ */
+// SSD1306 OLED 128x32 - SPI1 (Remapped), SCK: PB3, MOSI: PB5
+
+#include "stm32f103xb.h"
+#include "ssd1306-spi-driver.h"
+#include "delay.h"
+#include <string.h>
+
+#define SSD1306_WIDTH 128
+#define SSD1306_HEIGHT 32
+#define SSD1306_BUFFERSIZE (SSD1306_WIDTH * SSD1306_HEIGHT / 8)
+
+// OLED control pins
+#define SSD1306_CS_LOW()   (GPIOB->BRR  |= (1 << 12))
+#define SSD1306_CS_HIGH()  (GPIOB->BSRR |= (1 << 12))
+#define SSD1306_DC_LOW()   (GPIOB->BRR  |= (1 << 14))
+#define SSD1306_DC_HIGH()  (GPIOB->BSRR |= (1 << 14))
+#define SSD1306_RES_LOW()  (GPIOB->BRR  |= (1 << 10))
+#define SSD1306_RES_HIGH() (GPIOB->BSRR |= (1 << 10))
+
+static uint8_t buffer[SSD1306_BUFFERSIZE];
+
+// SPI1 write byte
+static void SPI_Write(uint8_t data) {
+    while (!(SPI1->SR & SPI_SR_TXE));
+    SPI1->DR = data;
+    while (SPI1->SR & SPI_SR_BSY);
+}
+
+// Write command to OLED
+static void SSD1306_WriteCommand(uint8_t cmd) {
+    SSD1306_DC_LOW();
+    SSD1306_CS_LOW();
+    SPI_Write(cmd);
+    SSD1306_CS_HIGH();
+}
+
+// Write data to OLED
+static void SSD1306_WriteData(uint8_t data) {
+    SSD1306_DC_HIGH();
+    SSD1306_CS_LOW();
+    SPI_Write(data);
+    SSD1306_CS_HIGH();
+}
+
+void SSD1306_Init(void) {
+    // Enable GPIOA, GPIOB, SPI1, and AFIO
+    RCC->APB2ENR |= RCC_APB2ENR_IOPAEN | RCC_APB2ENR_IOPBEN | RCC_APB2ENR_AFIOEN | RCC_APB2ENR_SPI1EN;
+
+    // Enable remap for SPI1 to use PB3 (SCK) and PB5 (MOSI)
+    AFIO->MAPR |= AFIO_MAPR_SPI1_REMAP;
+
+    // PB3 = SCK (AF PP, 50 MHz)
+    GPIOB->CRL &= ~(GPIO_CRL_CNF3 | GPIO_CRL_MODE3);
+    GPIOB->CRL |=  (GPIO_CRL_CNF3_1 | GPIO_CRL_MODE3_1 | GPIO_CRL_MODE3_0);
+
+    // PB5 = MOSI (AF PP, 50 MHz)
+    GPIOB->CRL &= ~(GPIO_CRL_CNF5 | GPIO_CRL_MODE5);
+    GPIOB->CRL |=  (GPIO_CRL_CNF5_1 | GPIO_CRL_MODE5_1 | GPIO_CRL_MODE5_0);
+
+    // PB12 = CS, PB14 = DC, PB10 = RES → General purpose output push-pull
+    GPIOB->CRH &= ~(GPIO_CRH_CNF12 | GPIO_CRH_MODE12);
+    GPIOB->CRH |=  GPIO_CRH_MODE12_1;
+
+    GPIOB->CRH &= ~(GPIO_CRH_CNF14 | GPIO_CRH_MODE14);
+    GPIOB->CRH |=  GPIO_CRH_MODE14_1;
+
+    GPIOB->CRH &= ~(GPIO_CRH_CNF10 | GPIO_CRH_MODE10);
+    GPIOB->CRH |=  GPIO_CRH_MODE10_1;
+
+    // SPI1 configuration (Master, fPCLK/8, SSM/SSI)
+    SPI1->CR1 = SPI_CR1_MSTR | SPI_CR1_BR_1 | SPI_CR1_SSM | SPI_CR1_SSI;
+    SPI1->CR1 |= SPI_CR1_SPE;
+
+    // Reset OLED
+    SSD1306_RES_LOW();
+    delay_ms(10);
+    SSD1306_RES_HIGH();
+
+    // OLED init sequence
+    SSD1306_WriteCommand(0xAE);
+    SSD1306_WriteCommand(0xD5);
+    SSD1306_WriteCommand(0x80);
+    SSD1306_WriteCommand(0xA8);
+    SSD1306_WriteCommand(0x1F);
+    SSD1306_WriteCommand(0xD3);
+    SSD1306_WriteCommand(0x00);
+    SSD1306_WriteCommand(0x40);
+    SSD1306_WriteCommand(0x8D);
+    SSD1306_WriteCommand(0x14);
+    SSD1306_WriteCommand(0x20);
+    SSD1306_WriteCommand(0x00);
+    SSD1306_WriteCommand(0xA1);
+    SSD1306_WriteCommand(0xC8);
+    SSD1306_WriteCommand(0xDA);
+    SSD1306_WriteCommand(0x02);
+    SSD1306_WriteCommand(0x81);
+    SSD1306_WriteCommand(0x8F);
+    SSD1306_WriteCommand(0xD9);
+    SSD1306_WriteCommand(0xF1);
+    SSD1306_WriteCommand(0xDB);
+    SSD1306_WriteCommand(0x40);
+    SSD1306_WriteCommand(0xA4);
+    SSD1306_WriteCommand(0xA6);
+    SSD1306_WriteCommand(0xAF);
+
+    SSD1306_Clear();
+    SSD1306_UpdateScreen();
+}
+
+void SSD1306_Clear(void) {
+    memset(buffer, 0x00, sizeof(buffer));
+}
+
+void SSD1306_UpdateScreen(void) {
+    for (uint8_t page = 0; page < 4; page++) {
+        SSD1306_WriteCommand(0xB0 + page);
+        SSD1306_WriteCommand(0x00);
+        SSD1306_WriteCommand(0x10);
+        for (uint8_t i = 0; i < SSD1306_WIDTH; i++) {
+            SSD1306_WriteData(buffer[page * SSD1306_WIDTH + i]);
+        }
+    }
+}
+
+void SSD1306_DisplayString(uint8_t row, uint8_t col, const char* str) {
+    extern const uint8_t Font6x8[][6];
+    uint16_t offset = row * SSD1306_WIDTH + col * 6;
+
+    while (*str && offset < SSD1306_BUFFERSIZE - 6) {
+        for (int i = 0; i < 6; i++) {
+            buffer[offset + i] = Font6x8[*str - 32][i];
+        }
+        offset += 6;
+        str++;
+    }
+    SSD1306_UpdateScreen();
+}

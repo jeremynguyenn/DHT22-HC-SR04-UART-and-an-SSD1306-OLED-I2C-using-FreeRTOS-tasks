@@ -1,0 +1,4 @@
+../Core/Src/drivers/dht22-driver.c:18:13:set_pin_output	1
+../Core/Src/drivers/dht22-driver.c:24:13:set_pin_input	1
+../Core/Src/drivers/dht22-driver.c:31:9:DHT22_Read	21
+../Core/Src/drivers/dht22-driver.c:118:6:DHT22_Init	1

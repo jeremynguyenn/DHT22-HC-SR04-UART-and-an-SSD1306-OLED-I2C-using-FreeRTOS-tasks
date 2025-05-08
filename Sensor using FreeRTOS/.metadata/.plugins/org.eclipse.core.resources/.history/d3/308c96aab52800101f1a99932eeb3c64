@@ -1,0 +1,100 @@
+#include "stm32f103xb.h"
+#include "uart-driver.h"
+#include "gpio-driver.h"
+#include "dht22-driver.h"
+#include "hc_sr04-driver.h"
+#include "ssd1306_font6x8.h"
+#include "delay.h"
+#include "ssd1306-i2c-driver.h"  // ✅ Switched to I2C OLED driver
+#include <string.h>
+#include <stdio.h>
+
+char rx_buffer[16];
+uint8_t idx = 0;
+uint8_t temperature, humidity;
+
+int main(void) {
+    UART1_Init();
+    GPIO_Init();
+    DHT22_Init();
+    HC_SR04_Init();
+    SSD1306_Init();  // ✅ Initialize the OLED display via I2C
+    UART1_SendString("System Initialized\r\n");
+
+    while (1) {
+        char c = UART1_ReceiveChar();
+        UART1_SendChar(c);  // Echo received character
+
+        if (c == '\r') {
+            rx_buffer[idx] = '\0';  // Null-terminate string
+
+            if (strcmp(rx_buffer, "TSTART") == 0) {
+                UART1_SendString("Real-time Temperature Monitoring Started\r\n");
+
+                while (1) {
+                    if (DHT22_Read(&temperature, &humidity)) {
+                        char temp_str[32], humidity_str[32];
+                        snprintf(temp_str, sizeof(temp_str), "Temperature: %d C\r\n", temperature);
+                        snprintf(humidity_str, sizeof(humidity_str), "Humidity: %d %%\r\n", humidity);
+                        UART1_SendString(temp_str);
+                        UART1_SendString(humidity_str);
+
+                        if (temperature > 30) {
+                            BUZZER_ON();
+                            UART1_SendString("Buzzer ON\r\n");
+                        } else {
+                            BUZZER_OFF();
+                            UART1_SendString("Buzzer OFF\r\n");
+                        }
+                    } else {
+                        UART1_SendString("DHT22 Read Failed\r\n");
+                    }
+
+                    delay_ms(1000);  // Update every 1s
+
+                    if (UART1_CharAvailable()) {
+                        UART1_SendString("Temperature Monitoring Stopped\r\n");
+                        BUZZER_OFF();  // Ensure buzzer is off
+                        break;
+                    }
+                }
+
+            } else if (strcmp(rx_buffer, "LED ON") == 0) {
+                LED_ON();
+                UART1_SendString("LED Turned ON\r\n");
+
+            } else if (strcmp(rx_buffer, "LED OFF") == 0) {
+                LED_OFF();
+                UART1_SendString("LED Turned OFF\r\n");
+
+            } else if (strcmp(rx_buffer, "DIST") == 0) {
+                UART1_SendString("Real-time Distance Monitoring Started\r\n");
+
+                while (1) {
+                    uint32_t dist = HC_SR04_Read();
+                    if (dist != 0) {
+                        char oled_msg[32];
+                        snprintf(oled_msg, sizeof(oled_msg), "Distance: %lu cm", dist);
+                        SSD1306_Clear();
+                        SSD1306_DisplayString(0, 0, oled_msg);  // Display on OLED
+                    }
+
+                    delay_ms(500);  // Update every 0.5s
+
+                    if (UART1_CharAvailable()) {
+                        UART1_SendString("Monitoring Stopped\r\n");
+                        break;
+                    }
+                }
+            } else {
+                UART1_SendString("Unknown Command\r\n");
+            }
+
+            idx = 0;  // Reset buffer
+        } else if (idx < sizeof(rx_buffer) - 1) {
+            rx_buffer[idx++] = c;
+        }
+
+        delay_ms(5);
+    }
+}

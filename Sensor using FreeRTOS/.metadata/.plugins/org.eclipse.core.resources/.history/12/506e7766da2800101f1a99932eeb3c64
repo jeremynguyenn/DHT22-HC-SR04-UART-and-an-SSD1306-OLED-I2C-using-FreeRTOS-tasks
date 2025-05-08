@@ -1,0 +1,32 @@
+//#include "stm32f1xx_hal.h"
+#include "cmsis_os.h"
+#include "systemclock_config.h"
+#include "task_uart.h"  // Your task header
+#include "uart-driver.h"
+
+// ⛳ Correct place to define the task (GLOBAL, not inside any function)
+osThreadDef(UART_Task, UART_Task1, osPriorityNormal, 1, 512);  // 512 words = 2KB stack
+
+osThreadId uartTaskHandle;
+void UART_Task1(void *argument) {
+    while(1) {
+        UART1_SendString("Task is running...\r\n");
+        osDelay(1000);  // Delay to let other tasks run
+    }
+}
+int main(void)
+{
+	UART1_Init();
+   // HAL_Init();
+    SystemClock_Config();
+    // CMSIS v1 initialization
+    UART1_SendString("Initialized\r\n");
+    osThreadDef(UART_Task, UART_Task1, osPriorityNormal, 1, 512);
+    UART1_SendString("Check1\r\n");
+    uartTaskHandle = osThreadCreate(osThread(UART_Task), NULL);
+    UART1_SendString("check2\r\n");
+    osKernelStart();  // Only this is needed to start scheduler
+    UART1_SendString("check3\r\n");
+
+    while (1);
+}
